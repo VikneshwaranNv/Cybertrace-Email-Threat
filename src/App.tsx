@@ -79,9 +79,36 @@ export default function App() {
     };
   }, []);
 
-  // Supabase Auth listener: captures email confirmation clicks and URL redirects automatically
+  // Supabase Auth listener: captures email confirmation clicks, PKCE codes, and URL redirects automatically
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
+
+    // Handle PKCE code flow (e.g., /?code=...)
+    const queryParams = new URLSearchParams(window.location.search);
+    const authCode = queryParams.get('code');
+    if (authCode) {
+      supabase.auth.exchangeCodeForSession(authCode).then(({ data, error }) => {
+        if (error) {
+          console.warn('PKCE code exchange error:', error);
+          showNotification(error.message || 'Email verification link invalid or expired', 'error');
+        } else if (data.session?.user) {
+          showNotification('Email successfully verified! Welcome to CyberTrace SOC.', 'success');
+          // Clean query param
+          queryParams.delete('code');
+          const newSearch = queryParams.toString() ? `?${queryParams.toString()}` : '';
+          window.history.replaceState(null, '', `${window.location.pathname}${newSearch}`);
+        }
+      });
+    }
+
+    // Check for hash errors (e.g., #error_description=...)
+    if (window.location.hash && window.location.hash.includes('error=')) {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const errorDesc = hashParams.get('error_description');
+      if (errorDesc) {
+        showNotification(decodeURIComponent(errorDesc).replace(/\+/g, ' '), 'error');
+      }
+    }
 
     const {
       data: { subscription },
@@ -130,6 +157,7 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
 
 
   const handleLogout = async () => {

@@ -134,6 +134,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           password,
         });
         if (sbError) {
+          if (sbError.message?.toLowerCase().includes('email not confirmed')) {
+            setError(
+              'Email not confirmed. Supabase requires email verification for this account before sign-in.'
+            );
+            return;
+          }
           throw new Error(sbError.message);
         }
         if (data.user) {
@@ -165,6 +171,57 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       }, 500);
     } catch (err: any) {
       setError(err?.message || 'Invalid email address or password. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Helper: Resend Supabase verification email
+  const handleResendConfirmation = async (targetEmail = email) => {
+    if (!isSupabaseConfigured || !supabase || !targetEmail.trim()) {
+      setError('Please provide an email address to resend confirmation.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const { error: resendErr } = await supabase.auth.resend({
+        type: 'signup',
+        email: targetEmail.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (resendErr) {
+        if (resendErr.message?.toLowerCase().includes('rate limit')) {
+          setError(
+            'Supabase email rate limit reached (free tier limit of 3 emails/hour). If you own this Supabase project, you can turn off "Confirm email" under Authentication → Providers → Email in your Supabase dashboard to sign in immediately.'
+          );
+        } else {
+          setError(resendErr.message);
+        }
+      } else {
+        setSuccessMessage(`Confirmation link resent to ${targetEmail.trim()}. Please check your email inbox.`);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to resend confirmation email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Helper: One-click Demo Operator login
+  const handleDemoSignIn = async (rolePreset: 'ANALYST' | 'ADMIN' = 'ANALYST') => {
+    setLoading(true);
+    setError(null);
+    try {
+      const demoEmail = rolePreset === 'ADMIN' ? 'admin@soc.internal' : 'analyst@soc.internal';
+      const demoPass = rolePreset === 'ADMIN' ? 'Admin@SOC2026!' : 'Analyst@SOC2026!';
+      const { user } = await loginUser(demoEmail, demoPass);
+      setSuccessMessage(`Authenticated as ${user.name} (${user.role})`);
+      setTimeout(() => onAuthenticated(user), 400);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to initialize demo operator session.');
     } finally {
       setLoading(false);
     }
@@ -209,6 +266,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           email: email.trim(),
           password,
           options: {
+            emailRedirectTo: `${window.location.origin}/`,
             data: {
               full_name: name.trim(),
               role,
@@ -216,13 +274,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           },
         });
         if (sbError) {
+          if (sbError.message?.toLowerCase().includes('rate limit')) {
+            throw new Error(
+              'Supabase email rate limit reached (free tier limit of 3 emails/hour). If you already registered, please check your inbox or disable "Confirm email" in Supabase settings.'
+            );
+          }
           throw new Error(sbError.message);
         }
         if (data.user) {
           setSuccessMessage(
             data.session
               ? `Account created successfully! Welcome, ${name}.`
-              : 'Account registered! Please check your email for verification.'
+              : 'Account registered! Please check your email for the confirmation link.'
           );
           if (data.session) {
             const profile: UserSessionProfile = {
@@ -276,7 +339,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     try {
       if (isSupabaseConfigured && supabase) {
         const { error: sbError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}/`,
         });
         if (sbError) throw new Error(sbError.message);
         setSuccessMessage('Password reset instructions sent. Please check your inbox.');
@@ -384,9 +447,47 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl transition-all">
           {/* Feedback Banners */}
           {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-red-950/60 border border-red-800/80 text-red-200 text-xs flex items-start gap-2.5 animate-fadeIn">
-              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-              <div className="flex-1 leading-relaxed">{error}</div>
+            <div className="mb-5 p-3.5 rounded-xl bg-red-950/60 border border-red-800/80 text-red-200 text-xs flex flex-col gap-2.5 animate-fadeIn">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 leading-relaxed">{error}</div>
+              </div>
+
+              {error.toLowerCase().includes('email not confirmed') && (
+                <div className="mt-1 pt-2.5 border-t border-red-800/50 space-y-2">
+                  <p className="text-[11px] text-slate-300">
+                    A confirmation link was previously sent to your email. Click below to resend the activation link or sign in directly with the demo account:
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleResendConfirmation(email)}
+                      disabled={loading}
+                      className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-[11px] transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Mail className="w-3 h-3" />
+                      <span>Resend Activation Link</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchScreen('verify-email')}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-[11px] transition-colors cursor-pointer"
+                    >
+                      Verification Screen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDemoSignIn('ANALYST')}
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-medium text-[11px] transition-colors cursor-pointer"
+                    >
+                      Instant Demo Login
+                    </button>
+                  </div>
+                  <div className="text-[10.5px] text-slate-400 bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                    💡 <strong>Tip for Supabase Project Owner:</strong> In your Supabase Dashboard, go to <strong>Authentication → Providers → Email</strong> and toggle off <strong>"Confirm email"</strong>. This allows users to register and sign in immediately without email confirmation!
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -929,23 +1030,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     )}
                   </button>
 
-                  <div className="text-center pt-1">
+                  <div className="text-center pt-1 space-y-2.5">
                     <button
                       type="button"
-                      onClick={async () => {
-                        if (supabase && email) {
-                          try {
-                            await supabase.auth.resend({ type: 'signup', email: email.trim() });
-                            setSuccessMessage('A fresh confirmation link has been sent to your email.');
-                          } catch (err: any) {
-                            setError(err?.message || 'Failed to resend confirmation email.');
-                          }
-                        }
-                      }}
-                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                      onClick={() => handleResendConfirmation(email)}
+                      disabled={loading}
+                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer underline"
                     >
                       Resend confirmation email
                     </button>
+                    <div className="text-[10.5px] text-slate-400 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-left">
+                      💡 <strong>Supabase Dashboard Tip:</strong> To disable email verification and allow instant logins, visit <strong>Authentication → Providers → Email</strong> in your Supabase dashboard and toggle off <strong>"Confirm email"</strong>.
+                    </div>
                   </div>
                 </div>
               ) : (
