@@ -6,9 +6,31 @@ export class AuthService {
   private users: Map<string, UserRecord> = new Map();
   private sessions: Map<string, AuthSession> = new Map();
   private failedAttempts: Map<string, { count: number; lockedUntil: number }> = new Map();
+  private resetAttempts: Map<string, { count: number; windowStart: number }> = new Map();
 
   constructor() {
     this.seedDefaultUsers();
+  }
+
+  public isValidEmail(email: unknown): boolean {
+    if (typeof email !== 'string') return false;
+    const trimmed = email.trim();
+    if (trimmed.length < 3 || trimmed.length > 254) return false;
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+    return emailRegex.test(trimmed);
+  }
+
+  public validatePassword(password: unknown): { valid: boolean; error?: string } {
+    if (typeof password !== 'string') {
+      return { valid: false, error: 'Password must be a valid string' };
+    }
+    if (password.length < 8) {
+      return { valid: false, error: 'Password must be at least 8 characters in length' };
+    }
+    if (password.length > 128) {
+      return { valid: false, error: 'Password exceeds maximum permitted length of 128 characters' };
+    }
+    return { valid: true };
   }
 
   private hashPassword(password: string, salt: string): string {
@@ -136,7 +158,22 @@ export class AuthService {
     passwordPlain: string,
     ip = '127.0.0.1'
   ): { success: true; token: string; user: UserPublicProfile } | { success: false; error: string; statusCode: number } {
-    const email = (emailRaw || '').trim().toLowerCase();
+    if (typeof emailRaw !== 'string' || !emailRaw.trim()) {
+      return { success: false, error: 'Email and password are required', statusCode: 400 };
+    }
+    if (typeof passwordPlain !== 'string' || !passwordPlain) {
+      return { success: false, error: 'Email and password are required', statusCode: 400 };
+    }
+
+    const email = emailRaw.trim().toLowerCase();
+    if (!this.isValidEmail(email)) {
+      return { success: false, error: 'Invalid email address format', statusCode: 400 };
+    }
+
+    if (passwordPlain.length > 128) {
+      return { success: false, error: 'Password exceeds maximum permitted length of 128 characters', statusCode: 400 };
+    }
+
     const rateKey = `${ip}:${email}`;
     const now = Date.now();
 
@@ -197,6 +234,66 @@ export class AuthService {
     return this.createSessionForUser(user, ip);
   }
 
+  public register(
+    emailRaw: string,
+    passwordPlain: string,
+    nameRaw?: string,
+    ip = '127.0.0.1'
+  ): { success: true; token: string; user: UserPublicProfile } | { success: false; error: string; statusCode: number } {
+    if (typeof emailRaw !== 'string' || !emailRaw.trim()) {
+      return { success: false, error: 'Email and password are required', statusCode: 400 };
+    }
+    const email = emailRaw.trim().toLowerCase();
+    if (!this.isValidEmail(email)) {
+      return { success: false, error: 'Invalid email address format', statusCode: 400 };
+    }
+
+    const passCheck = this.validatePassword(passwordPlain);
+    if (!passCheck.valid) {
+      return { success: false, error: passCheck.error!, statusCode: 400 };
+    }
+
+    // Uniqueness constraint enforcement (reject duplicate registration with 409 Conflict)
+    if (this.users.has(email)) {
+      return {
+        success: false,
+        error: 'An account with this email address already exists',
+        statusCode: 409,
+      };
+    }
+
+    // Strict Role Policy: Public registration always assigns ANALYST
+    const role: UserRole = 'ANALYST';
+
+    // Format & sanitize name
+    const sanitizedName = (typeof nameRaw === 'string' && nameRaw.trim())
+      ? nameRaw.replace(/<[^>]*>/g, '').trim().slice(0, 100)
+      : email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    const userId = `usr-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+
+    this.registerInternalUser({
+      id: userId,
+      email,
+      name: sanitizedName,
+      role,
+      passwordPlain: passwordPlain as string,
+    });
+
+    const newUser = this.users.get(email)!;
+    auditLogger.record({
+      action: 'USER_CREATED',
+      status: 'SUCCESS',
+      actorId: newUser.id,
+      actorEmail: newUser.email,
+      actorRole: newUser.role,
+      ip,
+      details: `New analyst account registered for ${newUser.name}. Assigned role: ${newUser.role}.`,
+    });
+
+    return this.createSessionForUser(newUser, ip);
+  }
+
   public registerOrLogin(
     emailRaw: string,
     passwordPlain: string,
@@ -219,33 +316,14 @@ export class AuthService {
       if (!hashesMatch) {
         return { success: false, error: 'Invalid password for this account', statusCode: 401 };
       }
-      if (nameRaw && nameRaw.trim()) {
-        existingUser.name = nameRaw.trim();
-      }
-      if (roleRaw) {
-        existingUser.role = roleRaw;
+      // SECURITY FIX (SEC-01): Do NOT mutate user's role based on unauthenticated caller input
+      if (nameRaw && typeof nameRaw === 'string' && nameRaw.trim()) {
+        existingUser.name = nameRaw.replace(/<[^>]*>/g, '').trim().slice(0, 100);
       }
       return this.createSessionForUser(existingUser, ip);
     }
 
-    // New user registration (e.g. user entering their gmail and password)
-    const formattedName = (nameRaw && nameRaw.trim())
-      ? nameRaw.trim()
-      : email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-
-    const role: UserRole = roleRaw || 'ANALYST';
-    const userId = `usr-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-
-    this.registerInternalUser({
-      id: userId,
-      email,
-      name: formattedName,
-      role,
-      passwordPlain,
-    });
-
-    const newUser = this.users.get(email)!;
-    return this.createSessionForUser(newUser, ip);
+    return this.register(email, passwordPlain, nameRaw, ip);
   }
 
   private createSessionForUser(
@@ -288,8 +366,43 @@ export class AuthService {
   public requestPasswordReset(
     emailRaw: string,
     ip = '127.0.0.1'
-  ): { success: true; message: string; resetToken?: string; verificationCode?: string } {
-    const email = (emailRaw || '').trim().toLowerCase();
+  ): { success: true; message: string; resetToken?: string; verificationCode?: string } | { success: false; error: string; statusCode: number } {
+    if (typeof emailRaw !== 'string' || !emailRaw.trim()) {
+      return { success: false, error: 'Email address is required', statusCode: 400 };
+    }
+    const email = emailRaw.trim().toLowerCase();
+    if (!this.isValidEmail(email)) {
+      return { success: false, error: 'Invalid email address format', statusCode: 400 };
+    }
+
+    const rateKey = `${ip}:${email}`;
+    const now = Date.now();
+    const windowMs = 10 * 60 * 1000;
+    const rateData = this.resetAttempts.get(rateKey) || { count: 0, windowStart: now };
+
+    if (now - rateData.windowStart > windowMs) {
+      rateData.count = 1;
+      rateData.windowStart = now;
+    } else {
+      rateData.count += 1;
+    }
+    this.resetAttempts.set(rateKey, rateData);
+
+    if (rateData.count > 3) {
+      auditLogger.record({
+        action: 'PASSWORD_RESET_BLOCKED',
+        status: 'DENIED',
+        actorEmail: email,
+        ip,
+        details: 'Password reset request blocked due to rate limiting (exceeded 3 requests in 10 minutes).',
+      });
+      return {
+        success: false,
+        error: 'Too many password reset requests. Please try again in 10 minutes.',
+        statusCode: 429,
+      };
+    }
+
     const user = this.users.get(email);
     const token = crypto.randomBytes(24).toString('hex');
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -323,12 +436,13 @@ export class AuthService {
     newPasswordPlain: string,
     ip = '127.0.0.1'
   ): { success: true; message: string } | { success: false; error: string; statusCode: number } {
-    if (!tokenOrCode || !newPasswordPlain) {
+    if (!tokenOrCode || typeof tokenOrCode !== 'string' || !tokenOrCode.trim()) {
       return { success: false, error: 'Reset token/code and new password are required', statusCode: 400 };
     }
 
-    if (newPasswordPlain.length < 8) {
-      return { success: false, error: 'Password must be at least 8 characters in length', statusCode: 400 };
+    const passCheck = this.validatePassword(newPasswordPlain);
+    if (!passCheck.valid) {
+      return { success: false, error: passCheck.error!, statusCode: 400 };
     }
 
     const trimmedInput = tokenOrCode.trim();

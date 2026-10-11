@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { evidenceLedger } from './server/blockchain/evidenceLedger';
 import { ALL_DEMO_CASES } from './server/demo/demoCases';
 import { caseService } from './server/services/caseService';
@@ -29,9 +28,9 @@ import { CaseStatus, CasePriority } from './src/types/forensics';
 
 dotenv.config();
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
-async function startServer() {
+export async function createExpressApp() {
   const app = express();
 
   // Security Headers & Hardening
@@ -46,6 +45,14 @@ async function startServer() {
   // Body Parsing with 10MB forensic boundary
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // Path normalization for serverless proxy environments (e.g. Vercel)
+  app.use((req, _res, next) => {
+    if (!req.url.startsWith('/api') && req.url !== '/' && !req.url.startsWith('/?')) {
+      req.url = '/api' + req.url;
+    }
+    next();
+  });
 
   // Initialize seed demonstration cases
   await caseService.initialize();
@@ -73,15 +80,15 @@ async function startServer() {
     });
   });
 
-  // Authentication: Analyst / Admin Login or Auto-Register (Public)
+  // Authentication: Analyst / Admin Login (Public)
   app.post('/api/auth/login', (req, res) => {
-    const { email, password, name, role } = req.body;
+    const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
     const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
-    const result = authService.registerOrLogin(email, password, name, role, clientIp);
+    const result = authService.login(email, password, clientIp);
 
     if (!result.success) {
       const failure = result as { success: false; error: string; statusCode: number };
@@ -97,20 +104,20 @@ async function startServer() {
 
   // Authentication: User / Operator Registration (Public)
   app.post('/api/auth/register', (req, res) => {
-    const { email, password, name, role } = req.body;
+    const { email, password, name } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
     const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
-    const result = authService.registerOrLogin(email, password, name, role, clientIp);
+    const result = authService.register(email, password, name, clientIp);
 
     if (!result.success) {
       const failure = result as { success: false; error: string; statusCode: number };
       return res.status(failure.statusCode).json({ error: failure.error });
     }
 
-    res.json({
+    res.status(201).json({
       success: true,
       token: result.token,
       user: result.user,
@@ -126,6 +133,10 @@ async function startServer() {
 
     const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
     const result = authService.requestPasswordReset(email, clientIp);
+    if (!result.success) {
+      const failure = result as { success: false; error: string; statusCode: number };
+      return res.status(failure.statusCode).json({ error: failure.error });
+    }
     res.json(result);
   });
 
@@ -1823,11 +1834,18 @@ async function startServer() {
     }
   });
 
-  // =========================================================================
-  // 5. VITE SPA SERVING
-  // =========================================================================
+  return app;
+}
+
+// =========================================================================
+// 5. VITE SPA SERVING & STANDALONE SERVER LISTENER
+// =========================================================================
+
+export async function startServer() {
+  const app = await createExpressApp();
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -1853,9 +1871,14 @@ async function startServer() {
     // Initialize background polling scheduler (disabled by default unless GMAIL_AUTO_SYNC_ENABLED=true)
     gmailPollingScheduler.start();
   });
+
+  return app;
 }
 
-startServer().catch(err => {
-  console.error('Fatal server startup error:', err);
-  process.exit(1);
-});
+// Only launch standalone server listener if not running in a Vercel Serverless environment
+if (process.env.VERCEL !== '1' && !process.env.VERCEL_ENV) {
+  startServer().catch(err => {
+    console.error('Fatal server startup error:', err);
+    process.exit(1);
+  });
+}
