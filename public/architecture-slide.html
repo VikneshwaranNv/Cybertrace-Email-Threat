@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CyberTrace System Architecture & Design</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0B0F19;
+      color: #F8FAFC;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    /* 16:9 Slide Canvas */
+    .slide-canvas {
+      width: 100%;
+      max-width: 1360px;
+      background: radial-gradient(circle at top right, #1E1B4B 0%, #0F172A 45%, #0B0F19 100%);
+      border: 1px solid #334155;
+      border-radius: 20px;
+      padding: 36px 44px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 40px rgba(59, 130, 246, 0.12);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slide-canvas::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #3B82F6, #8B5CF6, #06B6D4, #10B981, #F59E0B);
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 28px;
+      border-bottom: 1px solid #1E293B;
+      padding-bottom: 16px;
+    }
+    .header h1 {
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #FFFFFF 30%, #94A3B8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 4px;
+    }
+    .header p {
+      font-size: 13px;
+      color: #94A3B8;
+      font-weight: 500;
+    }
+    .tags {
+      display: flex;
+      gap: 8px;
+    }
+    .tag {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 6px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      color: #60A5FA;
+    }
+
+    /* Architecture Grid (4 Vertical Tiers) */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 1.8fr 1.1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .tier-box {
+      background: #111827;
+      border-radius: 14px;
+      border: 1px solid #1F2937;
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .tier-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #1F2937;
+    }
+    .tier-num {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .tier-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #FFFFFF;
+    }
+
+    /* Tier Components List */
+    .module-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+    .module-card {
+      background: #1E293B;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      padding: 10px 12px;
+      font-size: 12px;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .module-card:hover {
+      transform: translateY(-2px);
+    }
+    .mod-name {
+      font-weight: 800;
+      color: #F8FAFC;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mod-desc {
+      font-size: 11px;
+      color: #94A3B8;
+      line-height: 1.35;
+    }
+    .mod-subchips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .chip {
+      font-size: 9px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: #0F172A;
+      color: #CBD5E1;
+      border: 1px solid #334155;
+    }
+
+    /* Sub-grid for Engine tier (Column 3) */
+    .engine-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    /* Tier Theme Colors */
+    /* Tier 1: Presentation (Blue) */
+    .tier-1 { border-color: rgba(59, 130, 246, 0.4); box-shadow: 0 8px 20px -4px rgba(59, 130, 246, 0.1); }
+    .tier-1 .tier-num { background: rgba(59, 130, 246, 0.2); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.4); }
+    .tier-1 .module-card:hover { border-color: #60A5FA; }
+
+    /* Tier 2: Ingestion & API (Purple) */
+    .tier-2 { border-color: rgba(139, 92, 246, 0.4); box-shadow: 0 8px 20px -4px rgba(139, 92, 246, 0.1); }
+    .tier-2 .tier-num { background: rgba(139, 92, 246, 0.2); color: #C4B5FD; border: 1px solid rgba(139, 92, 246, 0.4); }
+    .tier-2 .module-card:hover { border-color: #A78BFA; }
+
+    /* Tier 3: Forensic & AI Engine (Cyan) */
+    .tier-3 { border-color: rgba(6, 182, 212, 0.4); box-shadow: 0 8px 20px -4px rgba(6, 182, 212, 0.1); }
+    .tier-3 .tier-num { background: rgba(6, 182, 212, 0.2); color: #67E8F9; border: 1px solid rgba(6, 182, 212, 0.4); }
+    .tier-3 .module-card:hover { border-color: #22D3EE; }
+
+    /* Tier 4: Ledger & Persistence (Emerald) */
+    .tier-4 { border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 8px 20px -4px rgba(16, 185, 129, 0.1); }
+    .tier-4 .tier-num { background: rgba(16, 185, 129, 0.2); color: #6EE7B7; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .tier-4 .module-card:hover { border-color: #34D399; }
+
+    /* Bottom Architecture Highlights Bar */
+    .highlights-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      background: #0F172A;
+      border: 1px solid #1E293B;
+      border-radius: 12px;
+      padding: 14px 20px;
+    }
+    .highlight-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .hl-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #60A5FA;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .hl-text {
+      font-size: 11px;
+      color: #CBD5E1;
+      line-height: 1.35;
+    }
+
+    /* Buttons */
+    .controls {
+      margin-top: 18px;
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      background: #2563EB;
+      color: white;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    .btn:hover { background: #1D4ED8; }
+    .btn-secondary {
+      background: #1E293B;
+      border: 1px solid #334155;
+      color: #E2E8F0;
+      box-shadow: none;
+    }
+    .btn-secondary:hover { background: #334155; }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .controls { display: none; }
+      .slide-canvas { box-shadow: none; border: 1px solid #ccc; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Slide Canvas -->
+  <div class="slide-canvas" id="slide-capture">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="title-group">
+        <h1>CyberTrace: End-to-End System Architecture</h1>
+        <p>Enterprise Digital Forensics & Incident Response (DFIR) Platform (SIH 2026 Problem Statement 26106)</p>
+      </div>
+      <div class="tags">
+        <span class="tag">REACT 19 + VITE</span>
+        <span class="tag">EXPRESS REST API</span>
+        <span class="tag">GEMINI 3.8 FLASH</span>
+        <span class="tag">SHA-256 BLOCKCHAIN</span>
+      </div>
+    </div>
+
+    <!-- 4-Tier Grid -->
+    <div class="arch-grid">
+
+      <!-- TIER 1: FRONTEND -->
+      <div class="tier-box tier-1">
+        <div class="tier-header">
+          <span class="tier-num">Tier 01</span>
+          <h2 class="tier-title">Client & Presentation</h2>
+        </div>
+        <div class="module-stack">
+          <div class="module-card">
+            <div class="mod-name">🖥️ React 19 SOC Workspace</div>
+            <div class="mod-desc">Modular SPA with Tailwind CSS v4 and dynamic dark/light theme controls.</div>
+            <div class="mod-subchips">
+              <span class="chip">Dashboard</span>
+              <span class="chip">Analyze</span>
+              <span class="chip">Headers</span>
+            </div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">🗺️ Real-World Tile Map</div>
+            <div class="mod-desc">Leaflet mapping with Cyber Dark, OSM, and Esri Satellite raster tiles.</div>
+            <div class="mod-subchips">
+              <span class="chip">Radar Pins</span>
+              <span class="chip">MTA Routes</span>
+            </div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">🔔 Real-Time Alert Center</div>
+            <div class="mod-desc">Server-Sent Events (SSE) live push stream for High/Critical threat events.</div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">🛡️ 4-Tier RBAC Switcher</div>
+            <div class="mod-desc">Instant privilege matrix: Admin, Senior Analyst, Analyst, Auditor.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIER 2: INGESTION & GATEWAY -->
+      <div class="tier-box tier-2">
+        <div class="tier-header">
+          <span class="tier-num">Tier 02</span>
+          <h2 class="tier-title">API & Ingestion Gateway</h2>
+        </div>
+        <div class="module-stack">
+          <div class="module-card">
+            <div class="mod-name">📥 Multi-Source Ingestion</div>
+            <div class="mod-desc">Accepts raw RFC-822 / .EML text, paste buffers, and file uploads.</div>
+            <div class="mod-subchips">
+              <span class="chip">10MB Boundary</span>
+              <span class="chip">MIME Parser</span>
+            </div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">📬 Gmail OAuth 2.0 API</div>
+            <div class="mod-desc">Google Workspace inbox synchronization with background polling scheduler.</div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">🔒 Security & Middleware</div>
+            <div class="mod-desc">RFC 6750 Bearer authentication, security headers, and forensic rate guards.</div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">📜 Audit Trail Logger</div>
+            <div class="mod-desc">Non-repudiable audit recording of all logins, queries, and case mutations.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIER 3: FORENSIC & AI ENGINES -->
+      <div class="tier-box tier-3">
+        <div class="tier-header">
+          <span class="tier-num">Tier 03</span>
+          <h2 class="tier-title">Core Forensic & AI Analysis Engines</h2>
+        </div>
+        <div class="engine-grid">
+          <div class="module-card">
+            <div class="mod-name">🔐 Auth Auditor</div>
+            <div class="mod-desc">Deterministic SPF, DKIM, DMARC alignment and Reply-To mismatch detection.</div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">🌐 Threat Intel & IOCs</div>
+            <div class="mod-desc">Typosquatting detection, safe URL defanging, and blacklist reputation correlation.</div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">📍 GeoIP & MTA Tracer</div>
+            <div class="mod-desc">Hop-by-hop relay reconstruction, Tor exit node discovery, and ISP profiling.</div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">🤖 Gemini 3.8 Copilot</div>
+            <div class="mod-desc">Google Gemini multimodal GenAI with grounded evidence and anti-injection guardrails.</div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">⚙️ Deterministic Heuristic</div>
+            <div class="mod-desc">Zero-downtime offline fallback guaranteeing 100% operational continuity.</div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">🎯 MITRE ATT&CK Mapper</div>
+            <div class="mod-desc">Direct technique correlation (T1566 Spearphishing, T1656 Impersonation, T1598).</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIER 4: PERSISTENCE & LEDGER -->
+      <div class="tier-box tier-4">
+        <div class="tier-header">
+          <span class="tier-num">Tier 04</span>
+          <h2 class="tier-title">Evidence & Persistence</h2>
+        </div>
+        <div class="module-stack">
+          <div class="module-card">
+            <div class="mod-name">⛓️ Blockchain Ledger</div>
+            <div class="mod-desc">Immutable evidence chain using SHA-256 bitstream hashing and Merkle roots.</div>
+            <div class="mod-subchips">
+              <span class="chip">Cryptographic Chain</span>
+            </div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">⚖️ Risk Scoring (0-100)</div>
+            <div class="mod-desc">Explainable 6-factor weighted mathematical evaluation without hallucinations.</div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">📄 Court-Admissible PDF</div>
+            <div class="mod-desc">Evidence-grade printable forensic dossier ready for legal and DFIR audit.</div>
+          </div>
+          <div class="module-card">
+            <div class="mod-name">🗂️ Case State Repository</div>
+            <div class="mod-desc">Lifecycle management, analyst assignments, and threat hunting indexes.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom Architectural Highlights -->
+    <div class="highlights-bar">
+      <div class="highlight-item">
+        <span class="hl-title">⚡ Zero-Downtime Resilience</span>
+        <span class="hl-text">Heuristic fallback guarantees triage continues seamlessly even during AI quota limits.</span>
+      </div>
+      <div class="highlight-item">
+        <span class="hl-title">🛡️ Defense-in-Depth</span>
+        <span class="hl-text">5 independent forensic layers prevent single points of failure and false positives.</span>
+      </div>
+      <div class="highlight-item">
+        <span class="hl-title">⛓️ Chain of Custody</span>
+        <span class="hl-text">Evidence sealed in an immutable cryptographic ledger meeting legal courtroom standards.</span>
+      </div>
+      <div class="highlight-item">
+        <span class="hl-title">👥 Multi-Tenant RBAC</span>
+        <span class="hl-text">Strict isolation between analysts and compliance auditors with complete audit trails.</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn" onclick="window.print()">🖨️ Print / Save as PDF for PPT</button>
+    <button class="btn btn-secondary" onclick="toggleTheme()">🌓 Switch Theme (Dark / Light)</button>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const body = document.body;
+      const canvas = document.getElementById('slide-capture');
+      if (body.style.background === 'rgb(248, 250, 252)' || body.style.background === '#F8FAFC') {
+        body.style.background = '#0B0F19';
+        body.style.color = '#F8FAFC';
+        canvas.style.background = 'radial-gradient(circle at top right, #1E1B4B 0%, #0F172A 45%, #0B0F19 100%)';
+        canvas.style.border = '1px solid #334155';
+      } else {
+        body.style.background = '#F8FAFC';
+        body.style.color = '#0F172A';
+        canvas.style.background = '#FFFFFF';
+        canvas.style.border = '1px solid #E2E8F0';
+      }
+    }
+  </script>
+
+</body>
+</html>

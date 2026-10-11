@@ -1,0 +1,45 @@
+Delivered-To: victim-executive@national-infra.gov.in
+Received: by mx1.national-infra.gov.in with SMTP id x42csp918172
+        for <victim-executive@national-infra.gov.in>; Sun, 06 Sep 2026 08:52:14 -0700 (PDT)
+Received: from in-relay.airtelbroadband.in ([203.192.204.15])
+        by mx1.national-infra.gov.in with ESMTPS id j18si2891102plm
+        for <victim-executive@national-infra.gov.in>; Sun, 06 Sep 2026 08:52:13 -0700 (PDT)
+Received: from tor-exit-node.zwiebel.de ([185.220.101.5])
+        by in-relay.airtelbroadband.in with ESMTP id t9102481023
+        for <victim-executive@national-infra.gov.in>; Sun, 06 Sep 2026 15:51:58 +0000
+Received: from identity-portal-cloud.internal ([10.240.12.88])
+        by tor-exit-node.zwiebel.de with HTTP; Sun, 06 Sep 2026 15:51:40 +0000
+Authentication-Results: mx1.national-infra.gov.in;
+        spf=fail (sender IP is 203.192.204.15) smtp.mailfrom=sec-alerts@corporate-identity-verify.com;
+        dkim=fail header.d=corporate-identity-verify.com header.b=X9a2;
+        dmarc=fail (p=QUARANTINE dis=QUARANTINE) header.from=corporate-identity-verify.com
+Return-Path: <sec-alerts@corporate-identity-verify.com>
+From: "National Infrastructure SOC - Identity Team" <security@corporate-identity-verify.com>
+To: victim-executive@national-infra.gov.in
+Subject: CRITICAL: Immediate MFA Token Verification Required - Policy Compliance SIH-26106
+Date: Sun, 06 Sep 2026 21:21:40 +0530
+Message-ID: <SIH-MFA-ALERT-20260906-99214@corporate-identity-verify.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 24px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
+    <h2 style="color: #dc2626; margin-top: 0;">Security Alert: MFA Device Re-Validation</h2>
+    <p>Dear System Administrator,</p>
+    <p>An anomalous login attempt targeting your privileged government workstation was detected from an unrecognized network relay.</p>
+    <table style="width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; margin: 16px 0; border-collapse: collapse;">
+      <tr><td style="padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e2e8f0;">Observed Ingress IP:</td><td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">185.220.101.5</td></tr>
+      <tr><td style="padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e2e8f0;">Ingress Relay Gateway:</td><td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">203.192.204.15</td></tr>
+      <tr><td style="padding: 8px 12px; font-weight: bold;">Status:</td><td style="padding: 8px 12px; color: #dc2626; font-weight: bold;">Session Frozen - Verification Pending</td></tr>
+    </table>
+    <p>You must confirm your Multi-Factor Authentication (MFA) token immediately to prevent directory lockout:</p>
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="https://auth-portal-secure.net/mfa/session?id=99214" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Re-Authenticate Security Token</a>
+    </div>
+    <p style="font-size: 12px; color: #64748b;">Incident Tracking Code: SIH-26106-DFIR-MFA. If this was not you, submit this message directly to the Cyber Incident Response Team.</p>
+  </div>
+</body>
+</html>

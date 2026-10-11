@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CyberTrace 5-Layer Threat Detection Architecture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0B0F19;
+      color: #F8FAFC;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    /* Presentation Slide Frame (16:9 Ratio) */
+    .slide-canvas {
+      width: 100%;
+      max-width: 1320px;
+      background: radial-gradient(circle at top right, #1E1B4B 0%, #0F172A 40%, #0B0F19 100%);
+      border: 1px solid #334155;
+      border-radius: 20px;
+      padding: 40px 48px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 40px rgba(59, 130, 246, 0.15);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slide-canvas::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #3B82F6, #8B5CF6, #EC4899, #F59E0B, #10B981);
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 32px;
+      border-bottom: 1px solid #1E293B;
+      padding-bottom: 18px;
+    }
+    .title-group h1 {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #FFFFFF 30%, #94A3B8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+    .title-group p {
+      font-size: 14px;
+      color: #94A3B8;
+      font-weight: 500;
+    }
+    .badge-group {
+      display: flex;
+      gap: 10px;
+    }
+    .badge {
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #60A5FA;
+    }
+
+    /* Pipeline Grid (Horizontal Flow) */
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+      position: relative;
+    }
+
+    /* Card Styling */
+    .layer-card {
+      background: #111827;
+      border-radius: 14px;
+      border: 1px solid #1F2937;
+      padding: 20px 18px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .layer-card:hover {
+      transform: translateY(-4px);
+    }
+
+    /* Connectors (Arrow between cards) */
+    .layer-card:not(:last-child)::after {
+      content: '➔';
+      position: absolute;
+      right: -13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #475569;
+      font-size: 14px;
+      font-weight: 900;
+      z-index: 10;
+    }
+
+    .card-num {
+      display: inline-block;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      width: fit-content;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      line-height: 1.3;
+      color: #FFFFFF;
+    }
+    .check-list {
+      list-style: none;
+      font-size: 12px;
+      color: #CBD5E1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .check-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      line-height: 1.4;
+    }
+    .check-list li span.bullet {
+      font-weight: 900;
+      font-size: 12px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* Color Themes Per Layer */
+    /* Layer 1: Blue */
+    .card-l1 {
+      border-color: rgba(59, 130, 246, 0.4);
+      box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.1);
+    }
+    .card-l1 .card-num { background: rgba(59, 130, 246, 0.2); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.4); }
+    .card-l1 .bullet { color: #60A5FA; }
+
+    /* Layer 2: Violet/Purple */
+    .card-l2 {
+      border-color: rgba(139, 92, 246, 0.4);
+      box-shadow: 0 10px 25px -5px rgba(139, 92, 246, 0.1);
+    }
+    .card-l2 .card-num { background: rgba(139, 92, 246, 0.2); color: #C4B5FD; border: 1px solid rgba(139, 92, 246, 0.4); }
+    .card-l2 .bullet { color: #A78BFA; }
+
+    /* Layer 3: Cyan/Sky */
+    .card-l3 {
+      border-color: rgba(6, 182, 212, 0.4);
+      box-shadow: 0 10px 25px -5px rgba(6, 182, 212, 0.1);
+    }
+    .card-l3 .card-num { background: rgba(6, 182, 212, 0.2); color: #67E8F9; border: 1px solid rgba(6, 182, 212, 0.4); }
+    .card-l3 .bullet { color: #22D3EE; }
+
+    /* Layer 4: Amber/Orange */
+    .card-l4 {
+      border-color: rgba(245, 158, 11, 0.4);
+      box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.1);
+    }
+    .card-l4 .card-num { background: rgba(245, 158, 11, 0.2); color: #FCD34D; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .card-l4 .bullet { color: #FBBF24; }
+
+    /* Layer 5: Rose/Red */
+    .card-l5 {
+      border-color: rgba(244, 63, 94, 0.4);
+      box-shadow: 0 10px 25px -5px rgba(244, 63, 94, 0.1);
+    }
+    .card-l5 .card-num { background: rgba(244, 63, 94, 0.2); color: #FDA4AF; border: 1px solid rgba(244, 63, 94, 0.4); }
+    .card-l5 .bullet { color: #FB7185; }
+
+    /* Bottom Summary Bar: Risk Score + Actions + Blockchain */
+    .bottom-bar {
+      display: grid;
+      grid-template-columns: 2.2fr 1fr;
+      gap: 16px;
+      background: #0F172A;
+      border: 1px solid #1E293B;
+      border-radius: 14px;
+      padding: 18px 24px;
+    }
+    .scoring-summary {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .scoring-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #94A3B8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    .formula-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .chip {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #1E293B;
+      color: #E2E8F0;
+      border: 1px solid #334155;
+    }
+    .chip span {
+      color: #60A5FA;
+      font-weight: 800;
+    }
+
+    .action-summary {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-left: 1px solid #1E293B;
+      padding-left: 20px;
+    }
+    .action-badges {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .act-tag {
+      font-size: 10px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 4px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+    .tag-low { background: rgba(16, 185, 129, 0.2); color: #34D399; border: 1px solid #10B981; }
+    .tag-high { background: rgba(245, 158, 11, 0.2); color: #FBBF24; border: 1px solid #F59E0B; }
+    .tag-crit { background: rgba(239, 68, 68, 0.2); color: #F87171; border: 1px solid #EF4444; }
+
+    /* Floating Print/Save Toolbar */
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      background: #2563EB;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    .btn:hover {
+      background: #1D4ED8;
+    }
+    .btn-secondary {
+      background: #1E293B;
+      border: 1px solid #334155;
+      color: #E2E8F0;
+      box-shadow: none;
+    }
+    .btn-secondary:hover {
+      background: #334155;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .controls { display: none; }
+      .slide-canvas { box-shadow: none; border: 1px solid #ccc; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 16:9 Presentation Slide Canvas -->
+  <div class="slide-canvas" id="slide-capture">
+
+    <!-- Slide Header -->
+    <div class="header">
+      <div class="title-group">
+        <h1>CyberTrace: 5-Layer AI Threat Detection & Risk Scoring</h1>
+        <p>Autonomous RFC-822 Digital Forensics & Multi-Vector Defense Pipeline (SIH 2026 Problem 26106)</p>
+      </div>
+      <div class="badge-group">
+        <div class="badge">DEFENSE-IN-DEPTH</div>
+        <div class="badge">100% DETERMINISTIC</div>
+      </div>
+    </div>
+
+    <!-- 5-Layer Horizontal Pipeline -->
+    <div class="pipeline">
+
+      <!-- LAYER 1: BLUE -->
+      <div class="layer-card card-l1">
+        <div>
+          <span class="card-num">Layer 01</span>
+          <h2 class="card-title">Cryptographic Header Audit</h2>
+          <ul class="check-list">
+            <li><span class="bullet">✔</span> <strong>SPF Check:</strong> Authorized IP in sender DNS</li>
+            <li><span class="bullet">✔</span> <strong>DKIM Signature:</strong> RSA cryptographic hash</li>
+            <li><span class="bullet">✔</span> <strong>DMARC Alignment:</strong> Visible 'From' matches DNS</li>
+            <li><span class="bullet">✔</span> <strong>Anomaly Flags:</strong> Reply-To & Display Spoofing</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- LAYER 2: PURPLE -->
+      <div class="layer-card card-l2">
+        <div>
+          <span class="card-num">Layer 02</span>
+          <h2 class="card-title">URL & Domain Intelligence</h2>
+          <ul class="check-list">
+            <li><span class="bullet">✔</span> <strong>Safe Defanging:</strong> hxxps:// & evil[.]com</li>
+            <li><span class="bullet">✔</span> <strong>Typosquatting:</strong> micros0ft.com / paypa1</li>
+            <li><span class="bullet">✔</span> <strong>Brand Deception:</strong> Fake SSO login paths</li>
+            <li><span class="bullet">✔</span> <strong>Reputation Feeds:</strong> Blacklist IOC correlation</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- LAYER 3: CYAN -->
+      <div class="layer-card card-l3">
+        <div>
+          <span class="card-num">Layer 03</span>
+          <h2 class="card-title">Sender IP & Infrastructure</h2>
+          <ul class="check-list">
+            <li><span class="bullet">✔</span> <strong>MTA Hop Tracing:</strong> Full relay transit path</li>
+            <li><span class="bullet">✔</span> <strong>Tor Exit Node:</strong> 98% severity anonymizer</li>
+            <li><span class="bullet">✔</span> <strong>VPN / Proxy:</strong> Commercial vs Residential</li>
+            <li><span class="bullet">✔</span> <strong>Geo Attribution:</strong> Origin continent & ISP</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- LAYER 4: ORANGE -->
+      <div class="layer-card card-l4">
+        <div>
+          <span class="card-num">Layer 04</span>
+          <h2 class="card-title">AI & Semantic NLP Engine</h2>
+          <ul class="check-list">
+            <li><span class="bullet">✔</span> <strong>Google Gemini:</strong> Multimodal 3.8 Flash</li>
+            <li><span class="bullet">✔</span> <strong>Offline Safety:</strong> Zero-downtime heuristics</li>
+            <li><span class="bullet">✔</span> <strong>Urgency Lures:</strong> Artificial time pressure</li>
+            <li><span class="bullet">✔</span> <strong>Financial Fraud:</strong> Wire transfer & invoice BEC</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- LAYER 5: RED -->
+      <div class="layer-card card-l5">
+        <div>
+          <span class="card-num">Layer 05</span>
+          <h2 class="card-title">MITRE ATT&CK Mapping</h2>
+          <ul class="check-list">
+            <li><span class="bullet">✔</span> <strong>T1566.001:</strong> Spearphishing malicious link</li>
+            <li><span class="bullet">✔</span> <strong>T1566.002:</strong> Weaponized macro attachment</li>
+            <li><span class="bullet">✔</span> <strong>T1656:</strong> Executive CEO impersonation</li>
+            <li><span class="bullet">✔</span> <strong>T1598:</strong> Phishing for credentials / SSO</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom Scoring & Action Bar -->
+    <div class="bottom-bar">
+      <div class="scoring-summary">
+        <div class="scoring-title">Explainable Mathematical Risk Score Engine (0 to 100 Scale)</div>
+        <div class="formula-chips">
+          <div class="chip">AI/NLP: <span>30%</span></div>
+          <div class="chip">URL/Domain: <span>20%</span></div>
+          <div class="chip">Auth (SPF/DKIM): <span>15%</span></div>
+          <div class="chip">IP/Tor Intel: <span>15%</span></div>
+          <div class="chip">Attachments: <span>10%</span></div>
+          <div class="chip">Social Eng: <span>10%</span></div>
+        </div>
+      </div>
+
+      <div class="action-summary">
+        <div class="scoring-title">Automated Action</div>
+        <div class="action-badges">
+          <span class="act-tag tag-low">0-24: ALLOW</span>
+          <span class="act-tag tag-high">50-74: BEC ALERT</span>
+          <span class="act-tag tag-crit">75+: QUARANTINE</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Action Controls -->
+  <div class="controls">
+    <button class="btn" onclick="window.print()">🖨️ Print / Save as PDF for PPT</button>
+    <button class="btn btn-secondary" onclick="toggleTheme()">🌓 Switch Theme (Dark / Light)</button>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const body = document.body;
+      const canvas = document.getElementById('slide-capture');
+      if (body.style.background === 'rgb(248, 250, 252)' || body.style.background === '#F8FAFC') {
+        body.style.background = '#0B0F19';
+        body.style.color = '#F8FAFC';
+        canvas.style.background = 'radial-gradient(circle at top right, #1E1B4B 0%, #0F172A 40%, #0B0F19 100%)';
+        canvas.style.border = '1px solid #334155';
+      } else {
+        body.style.background = '#F8FAFC';
+        body.style.color = '#0F172A';
+        canvas.style.background = '#FFFFFF';
+        canvas.style.border = '1px solid #E2E8F0';
+      }
+    }
+  </script>
+
+</body>
+</html>
