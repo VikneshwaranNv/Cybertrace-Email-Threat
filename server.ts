@@ -1875,8 +1875,14 @@ export async function startServer() {
   return app;
 }
 
-// Only launch standalone server listener if not running in a Vercel Serverless environment
-if (process.env.VERCEL !== '1' && !process.env.VERCEL_ENV) {
+// Only launch standalone server listener if executed directly as the main process
+const isMainModule = process.argv[1] && (
+  process.argv[1].endsWith('server.ts') ||
+  process.argv[1].endsWith('server.cjs') ||
+  process.argv[1].endsWith('server.js')
+);
+
+if (isMainModule) {
   startServer().catch(err => {
     console.error('Fatal server startup error:', err);
     process.exit(1);
