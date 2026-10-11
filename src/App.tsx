@@ -28,9 +28,11 @@ import {
   UserSessionProfile,
   getStoredUser,
   verifyCurrentSession,
+  saveSession,
   logoutUser,
   clearSession,
 } from './services/api';
+import { supabase, isSupabaseConfigured } from './services/supabase';
 import { CaseRecord, InvestigationCompletePayload } from './types/forensics';
 import { AlertCircle, Terminal, X, UploadCloud, CheckCircle2 } from 'lucide-react';
 
@@ -76,6 +78,59 @@ export default function App() {
       isMounted = false;
     };
   }, []);
+
+  // Supabase Auth listener: captures email confirmation clicks and URL redirects automatically
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (
+        session?.user &&
+        (event === 'SIGNED_IN' ||
+          event === 'USER_UPDATED' ||
+          event === 'TOKEN_REFRESHED' ||
+          event === 'INITIAL_SESSION')
+      ) {
+        const sbUser = session.user;
+        const role = (sbUser.user_metadata?.role as any) || 'ANALYST';
+        const name =
+          sbUser.user_metadata?.full_name ||
+          sbUser.email?.split('@')[0] ||
+          'SOC Operator';
+        const profile: UserSessionProfile = {
+          userId: sbUser.id,
+          email: sbUser.email || '',
+          name,
+          role,
+          organization: 'CyberTrace SOC Operations',
+          badgeNumber: `SOC-${sbUser.id.slice(0, 4)}`,
+        };
+        saveSession(session.access_token, profile, true);
+        setCurrentUser(profile);
+        setIsCheckingAuth(false);
+        await loadAllCasesAndDefault();
+
+        // Clear hash fragments from the URL bar cleanly
+        if (
+          window.location.hash &&
+          (window.location.hash.includes('access_token') ||
+            window.location.hash.includes('type='))
+        ) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        clearSession();
+        setCurrentUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
 
   const handleLogout = async () => {
     try {

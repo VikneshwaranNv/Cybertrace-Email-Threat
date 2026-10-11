@@ -62,6 +62,25 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Automatically check if user returned from Supabase email confirmation link
+  React.useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        const sbUser = data.session.user;
+        const profile: UserSessionProfile = {
+          userId: sbUser.id,
+          email: sbUser.email || '',
+          name: sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || 'SOC Operator',
+          role: (sbUser.user_metadata?.role as any) || 'ANALYST',
+          organization: 'CyberTrace SOC Operations',
+          badgeNumber: `SOC-${sbUser.id.slice(0, 4)}`,
+        };
+        onAuthenticated(profile);
+      }
+    });
+  }, [onAuthenticated]);
+
   // Clear messages when switching screens
   const switchScreen = (newScreen: AuthScreen) => {
     setScreen(newScreen);
@@ -857,46 +876,114 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 <div className="w-12 h-12 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center mx-auto mb-3">
                   <Mail className="w-6 h-6" />
                 </div>
-                <h2 className="text-lg font-bold text-white tracking-tight">Verify Your Email Address</h2>
+                <h2 className="text-lg font-bold text-white tracking-tight">Confirm Your Email Address</h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  We sent a confirmation code to <strong className="text-slate-200">{email}</strong>.
+                  We sent an activation email to <strong className="text-slate-200">{email}</strong>.
                 </p>
               </div>
 
-              <form onSubmit={handleVerifyEmail} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5 text-center">
-                    Enter 6-Digit Verification Code
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={6}
-                    placeholder="123456"
-                    value={verificationCode}
-                    onChange={e => setVerificationCode(e.target.value)}
-                    className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-base text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono tracking-widest text-center"
-                  />
-                  {fieldErrors.code && (
-                    <p className="text-[11px] text-red-400 mt-1 text-center">{fieldErrors.code}</p>
-                  )}
-                </div>
+              {isSupabaseConfigured ? (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-center text-xs text-slate-300 space-y-2">
+                    <p className="leading-relaxed">
+                      Please check your inbox and click the <strong className="text-blue-400">"Confirm your email address"</strong> button in the email from Supabase.
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Once confirmed, clicking the link in your email automatically logs you in!
+                    </p>
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md hover:shadow-blue-600/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
-                >
-                  {loading ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Verifying...</span>
-                    </>
-                  ) : (
-                    <span>Confirm & Sign In</span>
-                  )}
-                </button>
-              </form>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setLoading(true);
+                      if (supabase) {
+                        const { data } = await supabase.auth.getSession();
+                        if (data.session?.user) {
+                          const sbUser = data.session.user;
+                          const profile: UserSessionProfile = {
+                            userId: sbUser.id,
+                            email: sbUser.email || '',
+                            name: sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || 'SOC Operator',
+                            role: (sbUser.user_metadata?.role as any) || 'ANALYST',
+                            organization: 'CyberTrace SOC Operations',
+                            badgeNumber: `SOC-${sbUser.id.slice(0, 4)}`,
+                          };
+                          onAuthenticated(profile);
+                          return;
+                        }
+                      }
+                      setLoading(false);
+                      switchScreen('login');
+                    }}
+                    disabled={loading}
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md hover:shadow-blue-600/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Checking Status...</span>
+                      </>
+                    ) : (
+                      <span>I've Confirmed, Continue to Sign In</span>
+                    )}
+                  </button>
+
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (supabase && email) {
+                          try {
+                            await supabase.auth.resend({ type: 'signup', email: email.trim() });
+                            setSuccessMessage('A fresh confirmation link has been sent to your email.');
+                          } catch (err: any) {
+                            setError(err?.message || 'Failed to resend confirmation email.');
+                          }
+                        }
+                      }}
+                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                    >
+                      Resend confirmation email
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleVerifyEmail} className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1.5 text-center">
+                      Enter 6-Digit Verification Code
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      placeholder="123456"
+                      value={verificationCode}
+                      onChange={e => setVerificationCode(e.target.value)}
+                      className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-base text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono tracking-widest text-center"
+                    />
+                    {fieldErrors.code && (
+                      <p className="text-[11px] text-red-400 mt-1 text-center">{fieldErrors.code}</p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md hover:shadow-blue-600/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Verifying...</span>
+                      </>
+                    ) : (
+                      <span>Confirm & Sign In</span>
+                    )}
+                  </button>
+                </form>
+              )}
 
               <div className="mt-6 pt-5 border-t border-slate-800 text-center">
                 <button

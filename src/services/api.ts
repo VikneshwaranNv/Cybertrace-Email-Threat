@@ -26,6 +26,7 @@ import {
   HuntResult,
   IOCHit,
 } from '../types/forensics';
+import { supabase, isSupabaseConfigured } from './supabase';
 
 export interface SystemHealth {
   status: string;
@@ -308,6 +309,14 @@ export async function verifyEmail(email: string, code: string): Promise<{ succes
 }
 
 export async function logoutUser(): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('Supabase signout notice:', e);
+    }
+  }
+
   const token = getStoredToken();
   if (token) {
     try {
@@ -323,6 +332,31 @@ export async function logoutUser(): Promise<void> {
 }
 
 export async function verifyCurrentSession(): Promise<UserSessionProfile | null> {
+  // 1. If Supabase is configured, check for active Supabase session (including from URL hash redirects)
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        const sbUser = data.session.user;
+        const role = (sbUser.user_metadata?.role as any) || 'ANALYST';
+        const name = sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || 'SOC Operator';
+        const profile: UserSessionProfile = {
+          userId: sbUser.id,
+          email: sbUser.email || '',
+          name,
+          role,
+          organization: 'CyberTrace SOC Operations',
+          badgeNumber: `SOC-${sbUser.id.slice(0, 4)}`,
+        };
+        saveSession(data.session.access_token, profile, true);
+        return profile;
+      }
+    } catch (sbErr) {
+      console.warn('Supabase session check notice:', sbErr);
+    }
+  }
+
+  // 2. Fall back to local Express session token verification
   const token = getStoredToken();
   if (!token) return null;
 
