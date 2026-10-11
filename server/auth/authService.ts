@@ -83,6 +83,15 @@ export class AuthService {
       passwordPlain: 'Auditor@SOC2026!',
     });
 
+    // 6. Lead SOC Administrator (Vikneshwaran N)
+    this.registerInternalUser({
+      id: 'usr-lead-01',
+      email: 'vikneshwarann.25it@kongu.edu',
+      name: 'Vikneshwaran N',
+      role: 'ADMIN',
+      passwordPlain: 'Vikneshwarann@07',
+    });
+
     // Seed default active session for seamless SOC workbench startup
     this.getOrCreateDefaultSession();
   }

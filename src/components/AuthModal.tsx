@@ -38,6 +38,14 @@ const PRESET_OPERATORS = [
     description: 'Forensic Investigator. Demonstrates cross-analyst case isolation & ownership boundaries.',
   },
   {
+    email: 'vikneshwarann.25it@kongu.edu',
+    password: 'Vikneshwarann@07',
+    name: 'Lead SOC Operator Vikneshwaran N',
+    role: 'ADMIN' as const,
+    badge: 'LEAD-0001',
+    description: 'Platform Lead & Administrator. Full SOC oversight and authority across all forensic cases.',
+  },
+  {
     email: 'admin@soc.internal',
     password: 'Admin@SOC2026!',
     name: 'Chief SOC Security Admin Marcus Vance',
